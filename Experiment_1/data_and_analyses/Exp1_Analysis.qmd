@@ -1,0 +1,742 @@
+---
+title: "Exp1 Analysis"
+format: html
+---
+
+
+```{r setup, include=FALSE}
+# packages
+library(ez)
+library(reshape2)
+library(reshape)
+library(ggplot2)
+library(plyr)
+library(pastecs)
+library(ez)
+library(data.table)
+library(tidyverse) 
+library(dplyr) 
+
+library(showtext)
+library(readr)
+
+library(showtext)
+library(ggtext)
+showtext_auto()
+```
+
+
+```{r}
+tdata <- read.csv("exp1_data.csv")
+
+# exclude participants who failed the checks
+tdata_excl <- subset(tdata,  tdata$desktop_conf != "1: I confirm" | tdata$attent_conf != "1: I will take it seriously" | tdata$A_check != "correct")
+tdata <- subset(tdata, tdata$desktop_conf == "1: I confirm" & tdata$attent_conf == "1: I will take it seriously" & tdata$A_check == "correct")
+```
+
+
+# Results 
+
+```{r}
+table(tdata$comparison)
+table(tdata$condition)
+```
+
+
+```{r}
+mean(tdata$age)
+sd(tdata$age)
+min(tdata$age)
+max(tdata$age)
+```
+
+
+
+# Subsets
+
+## Main questions 
+
+```{r}
+
+tdata_main <- subset(tdata, select = c(1, 5:8))
+
+
+tdata_main <- tdata_main %>%
+  pivot_longer(
+    cols = c(4:5), # Select columns to pivot
+    names_to = "case", # Names for new columns
+    values_to = "rating" # Separator in original column names
+  )
+
+
+
+tdata_main$comparison <- factor(tdata_main$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+
+
+tdata_main$case <- factor(tdata_main$case, levels = c("case_1", "case_2"), 
+                     labels = c("case 1", "case 2"))
+
+
+tdata_main$rating <- tdata_main$rating * 0.01 # convert to 0-1 scale
+
+```
+
+
+
+
+### Graphs
+
+#### Predictions 
+
+see Excel file for the calculated values
+
+
+
+```{r}
+comparison <- c("ic_cccf")
+case <- c("ic_rating", "cf_rating")
+prediction <- c(0.43, 0.64) 
+
+preds <- data.frame(comparison, case, prediction)
+
+preds$comparison <- factor(preds$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+
+
+preds$case <- factor(preds$case, levels = c("ic_rating", "cf_rating"), 
+                     labels = c("case 1", "case 2"))
+
+
+comparison <- c("sl_cc")
+case <- c("ic_rating", "cf_rating")
+prediction <- c(0.3, 0.3) 
+
+preds2 <- data.frame(comparison, case, prediction)
+
+preds2$comparison <- factor(preds2$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+
+
+preds2$case <- factor(preds2$case, levels = c("ic_rating", "cf_rating"), 
+                     labels = c("case 1", "case 2"))
+
+
+
+preds <- rbind(preds, preds2)
+
+
+
+```
+
+
+Google Gemini judgments 
+
+
+
+
+```{r}
+
+comparison <- c("ic_cccf")
+case <- c("ic_rating", "cf_rating")
+prediction <- c(0.43, 0.64) 
+
+preds_gemini <- data.frame(comparison, case, prediction)
+
+preds_gemini$comparison <- factor(preds_gemini$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+
+
+preds_gemini$case <- factor(preds_gemini$case, levels = c("ic_rating", "cf_rating"), 
+                     labels = c("case 1", "case 2"))
+
+
+comparison <- c("sl_cc")
+case <- c("ic_rating", "cf_rating")
+prediction <- c(0.3, 0.3) 
+
+preds2 <- data.frame(comparison, case, prediction)
+
+preds2$comparison <- factor(preds2$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+
+
+preds2$case <- factor(preds2$case, levels = c("ic_rating", "cf_rating"), 
+                     labels = c("case 1", "case 2"))
+
+
+
+preds_gemini <- rbind(preds_gemini, preds2)
+
+
+```
+
+
+
+
+```{r}
+myTheme <- theme(plot.title = element_text(size = 20),
+        axis.title.x = element_text(size = 20),
+        axis.title.y = element_text(size = 20),
+        axis.text.x = element_text(size = 10, angle = 45, color = "#636363", vjust = 0.7), 
+        axis.text.y = element_text(size = 12, angle = 0, color = "#636363"),
+        legend.text = element_text(size = 18),
+        legend.title = element_text(face = "bold", size = 18),
+        strip.text.x = element_text(size = 18),
+        panel.grid.major = element_blank(), 
+        panel.grid.minor = element_blank(), 
+        panel.background = element_blank(), 
+        axis.line.x = element_line(colour = "black"), 
+        axis.line.y = element_line(colour = "black"),
+        axis.text = element_text(colour ="black"), 
+        axis.ticks = element_line(colour ="black"))
+
+
+library(see)
+
+
+tdata_sub <- preds
+
+
+
+pd <- position_dodge(width = 0.3)
+
+
+comp_labels <- c(
+  "icce vs cccf" = "ic vs cccf",
+  "icce vs chcf" = "ic vs chcf", 
+  "cccf vs chcf" = "cccf vs chcf"
+)
+
+
+
+font_add_google("Outfit", "title_font")
+font_add_google("Cabin", "body_font")
+showtext_auto()
+
+title_font <- "title_font"
+body_font <- "body_font"
+
+title_text <- "Normative values of P(e|c)"
+subtitle_text <- "for the different causal structures"
+caption_text <- "Note. Bars show means, error bars show 95% CIs. Black squares denote normative values."
+
+
+
+g1 <- ggplot(tdata_sub, aes(x = case, y = prediction, fill = comparison, color = comparison)) +
+  guides(fill=FALSE)+
+  facet_wrap( ~ comparison, labeller = labeller(comparison = comp_labels), nrow = 1, strip.position = "top")+
+  scale_y_continuous(limits = c(-0.02, 1.05), breaks=seq(0, 1, 0.1), expand = c(0,0)) +
+  scale_x_discrete(labels = c("Structure 1", "Structure 2")) +
+  #geom_jitter(aes(color = structure), alpha = 0.5, width = 0.15, height = 0.2) +
+  #geom_line(position = pd, size = 1, alpha=0.1) +
+  #stat_summary(aes(y = rating, group=1), fun.data = mean_cl_boot, 
+  #             geom = "errorbar", width = 0, size = 1) +
+  #stat_summary(aes(y = prediction, group=1), fun.y=mean, geom="line", 
+   #           shape = 22, size = 1.5, alpha = 0.9)+
+  #stat_summary(aes(y = prediction, group=1), fun.y=mean, geom="point", 
+   #           color = "black", shape = 22, size = 3, group=1, alpha = 1, fill = "black")+
+  #stat_summary(aes(y = rating,group=1), fun.y=median, geom="point", color = "black", shape = 3, size = 4, 
+   #            group=1, alpha = 1, position = position_dodge(width = 0.5))+
+  #stat_summary(aes(y = rating, group=1), fun.data = mean_cl_boot, 
+   #            geom = "errorbar", width = 0, size = 1, color = "black") +
+  stat_summary(aes(y=prediction, group=1), fun.y=mean, position=position_dodge(width=0.95), geom="line", alpha = 1, size = 2)+
+  stat_summary(aes(y=prediction, group=1), fun.y=mean, position=position_dodge(width=0.95), geom="point", shape = 21, alpha = 1, size = 5, 
+               color = "black")+
+  #stat_summary(aes(label=round(after_stat(y),2), group = 1), fun.y=mean, geom="text", size=4,
+   #          vjust = -0.3, hjust = 0.6)+
+  #geom_point(data = preds, aes(x = case, y = prediction), color = "black", fill = "#045a8d", size = 3, shape = 22) + # p
+  labs(x = "", y = "P(e|c)") +
+  #scale_color_manual(name = "Strength",values=c("#66c2a5", "#e78ac3", "#8da0cb", "#a6d854"))+
+  scale_color_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  scale_fill_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  #geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+   theme(legend.position = "none")+
+  theme_minimal()+
+  theme(
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(family = body_font, size=12),
+    axis.text.y = element_text(family = body_font, size=12),
+    strip.text.x = element_text(size = 12),
+  # Legend
+  legend.position = "none",
+  legend.title = element_blank(),
+  legend.spacing = unit(0.5, 'cm'),
+  legend.key.height= unit(0.5, 'cm'),
+  legend.key.width= unit(0.7, 'cm'),
+  legend.text = element_text(family = body_font,
+                             size=13,
+                             face = 'plain',
+                             color = "grey10"))
+
+
+g1
+
+#ggsave("figures/preds.svg",width=6,height=4.2)
+#ggsave("figures/Exp1_preds.pdf",width=6,height=3.2)
+
+```
+
+
+
+
+
+```{r}
+# plot group 1
+tdata_sub <- tdata_main
+
+preds_plot <- preds
+
+pd <- position_dodge(width = 0.3)
+
+font_add_google("Outfit", "title_font")
+font_add_google("Cabin", "body_font")
+showtext_auto()
+
+title_font <- "title_font"
+body_font <- "body_font"
+
+title_text <- "Participants' P(e|c) ratings"
+subtitle_text <- "for the different causal structures (N = 204)"
+caption_text <- "Note. Bars show means, error bars show 95% CIs. Black squares denote normative values."
+
+
+g3 <- ggplot(tdata_sub, aes(x = case, y = rating, fill = comparison, color = comparison)) +
+  guides(fill=FALSE)+
+  facet_wrap( ~ comparison, labeller = labeller(comparison = comp_labels), nrow = 1, strip.position = "top")+
+  scale_y_continuous(limits = c(-0.02, 1.05), breaks=seq(0, 1, 0.1), expand = c(0,0)) +
+  scale_x_discrete(labels = c("Structure 1", "Structure 2")) +
+  #geom_jitter(alpha = 0.15, width = 0.15, height = 0.02, aes(color = comparison)) +
+  geom_violin(alpha = 0.2, color = NA, trim = T)+
+  geom_line(position = position_jitter(height = 0.02, width = 0.15), size = 1, alpha=0.1, aes(group = subj_code)) +
+  #stat_summary(aes(y = prediction, group=1), fun.y=mean, geom="line", 
+   #           shape = 22, size = 1.5, alpha = 0.9)+
+  #stat_summary(aes(y = prediction, group=1), fun.y=mean, geom="point", 
+   #           color = "black", shape = 22, size = 3, group=1, alpha = 1, fill = "black")+
+  
+  stat_summary(aes(y = rating, group=1), fun.data = mean_cl_boot, 
+               geom = "errorbar", width = 0, size = 1, color = "black") +
+    stat_summary(aes(y=rating, group=1), fun.y=mean, position=position_dodge(width=0.95), geom="line", alpha = 1, size = 2)+
+  stat_summary(aes(y=rating, group=1), fun.y=mean, position=position_dodge(width=0.95), geom="point", shape = 21, alpha = 1, size = 5, 
+               color = "black")+
+
+  #stat_summary(aes(label=round(after_stat(y),2), group = 1), fun.y=mean, geom="text", size=4,
+   #          vjust = -3.9, hjust = 0.6)+
+  geom_point(data = preds_plot, aes(x = case, y = prediction), color = "black", fill = "black", size = 3, shape = 22) + # predictions
+  #stat_summary(aes(y = rating,group=1), fun.y=median, geom="point", color = "black", shape = 3, size = 4, 
+  #            group=1, alpha = 1, position = position_dodge(width = 0.5))+
+  #geom_point(data = preds, aes(x = case, y = prediction), color = "black", fill = "#045a8d", size = 3, shape = 22) + # p
+  labs(x = " ", y = "P(e|c) rating") +
+  #scale_color_manual(name = "Strength",values=c("#66c2a5", "#e78ac3", "#8da0cb", "#a6d854"))+
+  scale_color_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  scale_fill_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  #geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  theme(legend.position = "none")+
+  theme_minimal()+
+  theme(
+    axis.title.y = element_text(size = 12),
+    axis.text.x = element_text(family = body_font, size=12),
+    axis.text.y = element_text(family = body_font, size=12),
+    strip.text.x = element_text(size = 12),
+  # Legend
+  legend.position = "none",
+  legend.title = element_blank(),
+  legend.spacing = unit(0.5, 'cm'),
+  legend.key.height= unit(0.5, 'cm'),
+  legend.key.width= unit(0.7, 'cm'),
+  legend.text = element_text(family = body_font,
+                             size=13,
+                             face = 'plain',
+                             color = "grey10"))
+
+
+g3
+
+
+#ggsave("res_main.svg",width=6,height=3.2)
+#ggsave("res_main.pdf",width=6,height=3.2)
+```
+
+
+
+```{r}
+library(afex)
+library(emmeans)
+
+a1 <- aov_car(rating ~ comparison*case  + Error(subj_code/case), tdata_main, anova_table = list(es = "pes")) # the anova model
+a1 
+```
+
+
+```{r}
+cor.test(tdata$case_1, tdata$case_2, method = "pearson")
+```
+
+```{r}
+# means
+group_means <- emmeans(a1, c("case", "comparison")) 
+group_means
+```
+
+Test the pairs:
+
+```{r}
+pairs(emmeans(a1, ~ case|comparison), adjust = "none") -> deltas
+
+print("pair contrasts and test statistics")
+cat("\n\n") 
+deltas 
+
+cat("\n\n") 
+
+print("pair contrasts and their CIs")
+cat("\n\n") 
+confint(deltas, level = 0.95) -> diff_data
+
+diff_data
+```
+
+```{r}
+pairs(pairs(emmeans(a1, ~ comparison*case)), adjust = "none")
+```
+
+# Clusters 
+
+```{r}
+library(dplyr)
+
+# --- 2. Define the Margin of Error ---
+margin_of_error <- 3 # 3% margin (scale from 0 to 100)
+
+# --- 3. Cluster Participants ---
+tdata_clusters <- tdata %>%
+  mutate(
+    # Calculate the difference for easier understanding
+    rating_difference = case_2 - case_1,
+    
+    cluster = case_when(
+      # Condition 1: No change (absolute difference is within the margin)
+      # This condition must come FIRST to give precedence to the margin
+      abs(rating_difference) <= margin_of_error ~ "no change",
+      
+      # Condition 2: Increase (cf_rating is sufficiently greater than ic_rating)
+      # This means cf_rating - ic_rating > margin_of_error
+      rating_difference > margin_of_error ~ "increase",
+      
+      # Condition 3: Decrease (ic_rating is sufficiently greater than cf_rating)
+      # This means ic_rating - cf_rating > margin_of_error, or rating_difference < -margin_of_error
+      rating_difference < -margin_of_error ~ "decrease",
+      
+      # Optional: A catch-all for any cases not covered (shouldn't happen with these conditions)
+      TRUE ~ NA_character_ 
+    )
+  )
+
+tdata_clusters$comparison <- factor(tdata_clusters$comparison, levels = c("ic_cccf", "sl_cc"), 
+                          labels = c("Pair 1", "Pair 2"))
+```
+
+
+Graphs 
+
+```{r}
+font_add_google("Outfit", "title_font")
+font_add_google("Cabin", "body_font")
+showtext_auto()
+
+title_font <- "title_font"
+body_font <- "body_font"
+
+title_text <- "Changes in participants' P(e|c) ratings"
+subtitle_text <- "for the different causal structure pairs (N = 204)"
+caption_text <- "Note. Bars show proportions."
+
+
+cluster_summary <- tdata_clusters %>%
+  group_by(comparison, cluster) %>% # Group by both structure and cluster
+  summarise(n = n()) %>%
+  mutate(percentage = n / sum(n) * 100)
+
+clusters_plot <- cluster_summary 
+
+
+g4 <- ggplot(clusters_plot, aes(x = cluster, y = percentage, fill = comparison)) +
+  guides(fill=FALSE)+
+  facet_wrap( ~ comparison, labeller = labeller(comparison = comp_labels), nrow = 1, strip.position = "top")+
+  scale_y_continuous(limits = c(-1, 101), breaks=seq(0, 100, 10), expand = c(0,0)) +
+  geom_bar(stat = "identity", alpha = 0.6, color = "black") +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.5) +
+  labs(#title = "Percentage of Participants in Each Cluster by Causal Structure",
+       x = "Cluster",
+       y = "Percentage") +
+  #scale_color_manual(name = "Strength",values=c("#66c2a5", "#e78ac3", "#8da0cb", "#a6d854"))+
+  scale_color_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  scale_fill_manual(values=c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3"))+
+  #geom_hline(yintercept=0.3, linetype="dashed", color = "black")+
+  theme(legend.position = "none")+
+   labs(title = title_text,
+       subtitle = subtitle_text,
+       caption = caption_text)+
+  theme_minimal()+
+  theme(
+    axis.title.y = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(family = body_font, size=12),
+    axis.text.y = element_text(family = body_font, size=12),
+    strip.text.x = element_text(size = 12),
+  # Legend
+  legend.position = "none",
+  legend.title = element_blank(),
+  legend.spacing = unit(0.5, 'cm'),
+  legend.key.height= unit(0.5, 'cm'),
+  legend.key.width= unit(0.7, 'cm'),
+  legend.text = element_text(family = body_font,
+                             size=13,
+                             face = 'plain',
+                             color = "grey10"),
+  
+  # TITLE
+  plot.title.position = "plot",
+  plot.title = element_blank(),
+  
+  # SUB-TITLE
+  plot.subtitle = element_blank(),
+  # Caption
+  plot.caption = element_blank(),
+  
+  plot.background = element_rect(color="white", fill="white"),
+  plot.margin = margin(20, 40, 20, 40)
+)
+
+
+g4
+
+#ggsave("exp1_clusters.svg",width=7,height=3.2)
+#ggsave("exp1_clusters.pdf",width=7,height=3.2)
+```
+
+```{r}
+library(dplyr)
+library(ggplot2)
+library(binom)
+
+cluster_summary <- tdata_clusters %>%
+  count(comparison, cluster, name = "n") %>%
+  group_by(comparison) %>%
+  mutate(
+    n_total = sum(n),
+    p = n / n_total,
+    percentage = 100 * p
+  ) %>%
+  ungroup() %>%
+  # Wilson 95% CI for each bar
+  bind_cols(
+    binom.confint(
+      x = .$n,
+      n = .$n_total,
+      methods = "wilson"
+    ) %>%
+      transmute(
+        ci_low  = 100 * lower,
+        ci_high = 100 * upper
+      )
+  )
+
+clusters_plot <- cluster_summary
+
+g4 <- ggplot(clusters_plot, aes(x = cluster, y = percentage, fill = comparison)) +
+  guides(fill = FALSE) +
+  facet_wrap(~ comparison, labeller = labeller(comparison = comp_labels),
+             nrow = 1, strip.position = "top") +
+  scale_y_continuous(limits = c(-1, 101), breaks = seq(0, 100, 10), expand = c(0, 0)) +
+  geom_bar(stat = "identity", alpha = 0.6, color = "black") +
+  geom_errorbar(
+    aes(ymin = ci_low, ymax = ci_high),
+    width = 0.15,
+    linewidth = 0.5,
+    color = "black"
+  ) +
+  geom_text(aes(label = paste0(round(percentage, 1), "%")), vjust = -0.5) +
+  labs(x = "Cluster", y = "Percentage",
+       title = title_text, subtitle = subtitle_text, caption = caption_text) +
+  scale_color_manual(values = c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3")) +
+  scale_fill_manual(values  = c("#367A5D", "#D19032", "#296398", "#984335", "#8E7CC3")) +
+  theme_minimal() +
+  theme(
+    axis.title.y = element_text(size = 12),
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(family = body_font, size = 12),
+    axis.text.y = element_text(family = body_font, size = 12),
+    strip.text.x = element_text(size = 12),
+    legend.position = "none",
+    plot.title = element_blank(),
+    plot.subtitle = element_blank(),
+    plot.caption = element_blank(),
+    plot.background = element_rect(color = "white", fill = "white"),
+    plot.margin = margin(20, 40, 20, 40)
+  )
+
+g4
+
+```
+
+
+```{r}
+library(ggplot2)
+library(showtext)
+library(RColorBrewer)
+
+# 1. Define the Okabe-Ito Palette (Publication standard)
+# This is a hand-picked professional palette
+pub_palette <- c("#E69F00", "#56B4E9", "#009E73", "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# 2. Updated Mean Plot (G3)
+g3 <- ggplot(tdata_sub, aes(x = case, y = rating, fill = comparison, color = comparison)) +
+  facet_wrap(~ comparison, labeller = labeller(comparison = comp_labels), nrow = 1) +
+  #facet_wrap( ~ causation_type, labeller = labeller(causation_type = comp_labels), nrow = 1, strip.position = "top")+
+  # Background individual lines
+  geom_line(aes(group = subj_code), 
+            position = position_jitter(height = 0.02, width = 0.05), 
+            linewidth = 0.3, alpha = 0.2) +
+  geom_violin(alpha = 0.2, color = NA, trim = TRUE) +
+  
+  # Summary: Color-matched lines and points
+  stat_summary(aes(group = 1), fun.data = mean_cl_boot, geom = "errorbar", width = 0, linewidth = 0.8) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1.1) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", shape = 21, size = 3.5, stroke = 1.2, fill = "white") +
+  
+  # Model Predictions (Black squares)
+  geom_point(data = preds_plot, aes(x = case, y = prediction), 
+             color = "black", fill = "black", size = 2.2, shape = 22) + 
+
+  # Scales & Labels
+  scale_y_continuous(limits = c(0, 1.05), breaks = seq(0, 1, 0.2), expand = c(0, 0)) +
+  scale_color_manual(values = pub_palette) +
+  scale_fill_manual(values = pub_palette) +
+  labs(x = "Parameter Value", y = expression(bold(paste("P(e|c) Rating")))) +
+  
+  theme_minimal(base_size = 12) +
+  theme(
+    text = element_text(family = "body_font"),
+    strip.background = element_rect(fill = "grey92", color = "grey92"), # Slightly darker for more 'structure'
+    strip.text = element_text(face = "bold", size = 9, family = "title_font"),
+    panel.spacing = unit(1.2, "lines"),
+    axis.title.x = element_text(margin = margin(t = 10), face = "bold"),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  )
+g3
+
+# 3. Updated Bar Plot (G4)
+g4 <- ggplot(clusters_plot, aes(x = cluster, y = percentage, fill = comparison)) +
+  facet_wrap(~ comparison, labeller = labeller(comparison = comp_labels), nrow = 1) +
+  geom_bar(stat = "identity", alpha = 0.85, color = NA) + 
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2, linewidth = 0.6, color = "grey20") +
+  geom_text(aes(label = paste0(round(percentage, 0), "%")), vjust = -1.2, family = "body_font", size = 3.2) +
+  
+  scale_y_continuous(limits = c(0, 115), breaks = seq(0, 100, 25), expand = c(0, 0)) +
+  scale_fill_manual(values = pub_palette) + # Same palette!
+  
+  labs(x = "Cluster", y = "Percentage (%)") +
+  theme_minimal(base_size = 12) +
+  theme(
+    text = element_text(family = "body_font"),
+    strip.background = element_rect(fill = "grey92", color = "grey92"),
+    strip.text = element_text(face = "bold", size = 9, family = "title_font"),
+    axis.title.x = element_text(margin = margin(t = 10), face = "bold"),
+    axis.text.x = element_text(size = 8),
+    plot.caption = element_text(hjust = 0, size = 8, family = "body_font"),
+    legend.position = "none"
+  )
+
+g4
+```
+
+
+
+```{r}
+library(ggpubr)
+figure <- ggarrange(g3, g4,
+                    labels = c("A", "B"),
+                    font.label = list(size = 24, color = "black"),
+                    ncol = 2, nrow = 1)
+figure
+#ggsave("figures/Res_Exp1.pdf", figure, width = 10, height = 4)
+```
+
+
+test if the normative cluster is the (absolute) majority cluster (i.e. > 50% of participants):
+
+```{r}
+summary_table <- cluster_summary
+
+
+# --- Test 1: "increase" cluster > 50% in "ic_cccf" condition ---
+
+# Extract relevant data for ic_cccf
+n_increase_ic_cccf <- summary_table$n[summary_table$comparison == "Pair 1" & summary_table$cluster == "increase"]
+n_decrease_ic_cccf <- summary_table$n[summary_table$comparison == "Pair 1" & summary_table$cluster == "decrease"]
+n_no_change_ic_cccf <- summary_table$n[summary_table$comparison == "Pair 1" & summary_table$cluster == "no change"]
+
+total_n_ic_cccf <- n_increase_ic_cccf + n_no_change_ic_cccf + n_decrease_ic_cccf
+
+cat("--- Test 1: 'increase' cluster > 50% in 'ic_cccf' ---\n")
+cat("Count for 'increase' in 'ic_cccf':", n_increase_ic_cccf, "\n")
+cat("Total count for 'ic_cccf':", total_n_ic_cccf, "\n")
+
+prop_test_ic_cccf <- prop.test(x = n_increase_ic_cccf,
+                                n = total_n_ic_cccf,
+                                p = 0.50,
+                                alternative = "greater",
+                                correct = TRUE) # correct = TRUE applies Yates' continuity correction
+print(prop_test_ic_cccf)
+
+
+# --- Test 2: "no change" cluster > 50% in "sl_ce" condition ---
+
+# Extract relevant data for sl_ce
+n_no_change_sl_cc <- summary_table$n[summary_table$comparison == "Pair 2" & summary_table$cluster == "no change"]
+n_decrease_sl_cc <- summary_table$n[summary_table$comparison == "Pair 2" & summary_table$cluster == "decrease"]
+n_increase_sl_cc <- summary_table$n[summary_table$comparison == "Pair 2" & summary_table$cluster == "increase"]
+
+total_n_sl_cc <- n_no_change_sl_cc + n_decrease_sl_cc + n_increase_sl_cc
+
+cat("\n--- Test 2: 'no change' cluster > 50% in 'sl_ce' ---\n")
+cat("Count for 'no change' in 'sl_cc':", n_no_change_sl_cc, "\n")
+cat("Total count for 'sl_ce':", total_n_sl_cc, "\n")
+
+prop_test_sl_cc <- prop.test(x = n_no_change_sl_cc,
+                             n = total_n_sl_cc,
+                             p = 0.50,
+                             alternative = "greater",
+                             correct = TRUE)
+print(prop_test_sl_cc)
+```
+
+
+```{r}
+n_increase_ic_cccf <- summary_table$n[summary_table$comparison == "Pair 1" & summary_table$cluster == "increase"]
+n_increase_sl_cc <- summary_table$n[summary_table$comparison == "Pair 2" & summary_table$cluster == "increase"]
+
+
+res <- prop.test(x = c(n_increase_ic_cccf, n_increase_sl_cc), n = c(102, 102), 
+                 alternative = "greater", 
+                 correct = TRUE)
+# Printing the results
+res 
+```
+
+```{r}
+n_no_change_ic_cccf <- summary_table$n[summary_table$comparison == "Pair 1" & summary_table$cluster == "no change"]
+n_no_change_sl_cc <- summary_table$n[summary_table$comparison == "Pair 2" & summary_table$cluster == "no change"]
+
+
+res <- prop.test(x = c(n_no_change_sl_cc, n_no_change_ic_cccf), n = c(102, 102), 
+                 alternative = "greater", 
+                 correct = TRUE)
+# Printing the results
+res 
+```
+
+
+
