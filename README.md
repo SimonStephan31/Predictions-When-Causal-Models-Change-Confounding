@@ -10,6 +10,9 @@ The "data_and_analyses" folder contains the datasets used for the experiments an
 while the "experiment_files" folder includes the experiment files. 
 The "experiment_files" folder can be downloaded to run offline demo versions of the studies.
 
+The corresponding OSF-project can be found at [https://osf.io/fu3ab/](https://osf.io/fu3ab/), 
+where you can also find the preregistrations of the experiments.
+
 ```
 +---Experiment_1
 |   +---data_and_analyses
