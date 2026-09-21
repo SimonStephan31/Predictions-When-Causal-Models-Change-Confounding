@@ -215,6 +215,14 @@ cluster_table
 chisq.test(cluster_table)
 ```
 
+Distribution of clusters within each condition (χ² goodness-of-fit tests
+against equal cluster frequencies):
+
+```{r cluster-chisq-within}
+chisq.test(cluster_table["generative", ])
+chisq.test(cluster_table["preventive", ])
+```
+
 Among participants who changed their ratings, is the normative cluster larger
 than the non-normative one? Directed (one-sided) binomial tests against 0.5,
 restricted to the "increase" and "decrease" clusters.
