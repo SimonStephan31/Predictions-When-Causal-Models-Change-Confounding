@@ -1,0 +1,333 @@
+---
+title: "Experiment 1: Analysis"
+subtitle: "Making Predictions When Causal Models Change – The Role of Confounding"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    fig-dpi: 300
+execute:
+  warning: false
+  message: false
+---
+
+This script reproduces all results reported for Experiment 1 (Section 3.2 and
+the Participants section 3.1.3) and Figure 5 of the manuscript. Data:
+`data/exp1_data.csv` (see `CODEBOOK.md`). Figure output: `figures/`.
+
+# Setup
+
+```{r setup}
+library(tidyverse)  # data wrangling (dplyr, tidyr) and ggplot2
+library(afex)       # aov_car()
+library(emmeans)    # estimated marginal means and contrasts
+library(binom)      # Wilson CIs for the cluster proportions
+library(Hmisc)      # mean_cl_boot() used in stat_summary()
+library(ggpubr)     # ggarrange()
+library(showtext)   # font rendering
+
+# Fonts: Google fonts are downloaded at run time. Without an internet
+# connection the figure falls back to the default sans font.
+fonts_ok <- tryCatch({
+  font_add_google("Outfit", "title_font")
+  font_add_google("Cabin", "body_font")
+  TRUE
+}, error = function(e) FALSE)
+title_font <- if (fonts_ok) "title_font" else "sans"
+body_font  <- if (fonts_ok) "body_font"  else "sans"
+showtext_auto()
+showtext_opts(dpi = 300)
+
+dir.create("figures", showWarnings = FALSE)
+```
+
+# Data and exclusions
+
+Participants were excluded if they did not confirm participating via a PC or
+laptop, did not confirm taking the study seriously, or answered the
+comprehension check about the causal role of A (`A_check`) incorrectly.
+
+```{r data}
+tdata_raw <- read.csv("data/exp1_data.csv")
+
+tdata <- subset(tdata_raw,
+                desktop_conf == "1: I confirm" &
+                attent_conf  == "1: I will take it seriously" &
+                A_check      == "correct")
+
+cat("Recruited:", nrow(tdata_raw),
+    "| Excluded:", nrow(tdata_raw) - nrow(tdata),
+    "| Final N:", nrow(tdata), "\n")
+
+# n per pair (condition)
+table(tdata$comparison)
+```
+
+## Demographics
+
+```{r demographics}
+tdata %>%
+  summarise(M_age = mean(age), SD_age = sd(age),
+            min_age = min(age), max_age = max(age))
+```
+
+# Normative values
+
+Normative values of P(e|c) (Equations 2 and 4 of the manuscript), using the
+parameter values shown in Figure 2.
+
+```{r normative}
+# Equation 2: independent-causes model
+p_ec_ic <- function(w_ce, w_ae, b_a) {
+  w_ce + b_a * w_ae - w_ce * b_a * w_ae
+}
+
+# Equation 4: confounded model (generative confounding link A -> C)
+p_ec_cccf <- function(w_ce, w_ae, w_ac, b_a, b_c) {
+  numerator   <- w_ac * b_a + b_c * b_a - w_ac * b_c * b_a
+  denominator <- w_ac * b_a + b_c - w_ac * b_c * b_a
+  w_ce + (1 - w_ce) * w_ae * (numerator / denominator)
+}
+
+preds <- data.frame(
+  comparison = c("Pair 1", "Pair 1", "Pair 2", "Pair 2"),
+  case       = c("case 1", "case 2", "case 1", "case 2"),
+  prediction = c(
+    p_ec_ic(w_ce = 0.3, w_ae = 0.9, b_a = 0.2),                         # independent-causes model
+    p_ec_cccf(w_ce = 0.3, w_ae = 0.9, w_ac = 0.9, b_a = 0.2, b_c = 0.2), # confounded model
+    0.3,                                                                 # single-link model: P(e|c) = w_ce
+    0.3                                                                  # side-effect model: P(e|c) = w_ce
+  )
+)
+preds$comparison <- factor(preds$comparison, levels = c("Pair 1", "Pair 2"))
+preds$case       <- factor(preds$case, levels = c("case 1", "case 2"))
+preds
+```
+
+# Mean ratings
+
+`case_1` is the rating for the first model of a pair as listed in Figure 2
+(independent-causes / single-link model), `case_2` the rating for the second
+(confounded / side-effect model), irrespective of the side on which the model
+was shown.
+
+```{r long-format}
+tdata_main <- tdata %>%
+  select(subj_code, comparison, order, case_1, case_2) %>%
+  pivot_longer(cols = c(case_1, case_2),
+               names_to = "case", values_to = "rating")
+
+tdata_main$comparison <- factor(tdata_main$comparison,
+                                levels = c("ic_cccf", "sl_cc"),
+                                labels = c("Pair 1", "Pair 2"))
+tdata_main$case <- factor(tdata_main$case,
+                          levels = c("case_1", "case_2"),
+                          labels = c("case 1", "case 2"))
+
+tdata_main$rating <- tdata_main$rating * 0.01  # convert to 0-1 scale
+```
+
+2 (Pair; between) × 2 (Model; within) ANOVA. The η²p of the interaction is the
+effect size reported for the interaction contrast.
+
+```{r anova}
+a1 <- aov_car(rating ~ comparison * case + Error(subj_code / case),
+              tdata_main, anova_table = list(es = "pes"))
+a1
+```
+
+Cell means (reported as M_S1 and M_S2):
+
+```{r means}
+emm <- emmeans(a1, ~ case * comparison)
+emm
+```
+
+Directed interaction contrast: is the increase from the first to the second
+model larger in Pair 1 (confounder condition) than in Pair 2 (control
+condition)?
+
+```{r interaction-contrast}
+# cell order: (case 1, Pair 1), (case 2, Pair 1), (case 1, Pair 2), (case 2, Pair 2)
+contrast(emm, list(interaction = c(-1, 1, 1, -1)), side = ">")
+```
+
+# Clusters
+
+Participants are clustered by their intra-individual rating difference
+(`case_2 - case_1`). Differences within ±3 points on the 0–100 rating scale
+are classified as "no change".
+
+```{r clusters}
+margin_of_error <- 3  # on the 0-100 rating scale
+
+tdata_clusters <- tdata %>%
+  mutate(
+    rating_difference = case_2 - case_1,
+    cluster = case_when(
+      abs(rating_difference) <= margin_of_error ~ "no change",
+      rating_difference >  margin_of_error      ~ "increase",
+      rating_difference < -margin_of_error      ~ "decrease"
+    )
+  )
+
+tdata_clusters$comparison <- factor(tdata_clusters$comparison,
+                                    levels = c("ic_cccf", "sl_cc"),
+                                    labels = c("Pair 1", "Pair 2"))
+
+cluster_summary <- tdata_clusters %>%
+  count(comparison, cluster, name = "n") %>%
+  group_by(comparison) %>%
+  mutate(n_total = sum(n),
+         p = n / n_total,
+         percentage = 100 * p) %>%
+  ungroup() %>%
+  # Wilson 95% CI for each bar
+  bind_cols(
+    binom.confint(x = .$n, n = .$n_total, methods = "wilson") %>%
+      transmute(ci_low = 100 * lower, ci_high = 100 * upper)
+  )
+
+cluster_summary
+```
+
+## Cluster differences between conditions
+
+Directed two-sample tests for equality of proportions (with continuity
+correction).
+
+```{r cluster-tests-between}
+get_n <- function(pair, cl) {
+  n <- cluster_summary$n[cluster_summary$comparison == pair &
+                         cluster_summary$cluster == cl]
+  if (length(n) == 0) 0 else n
+}
+n_pair1 <- sum(cluster_summary$n[cluster_summary$comparison == "Pair 1"])
+n_pair2 <- sum(cluster_summary$n[cluster_summary$comparison == "Pair 2"])
+
+# "increase" cluster: Pair 1 > Pair 2
+prop.test(x = c(get_n("Pair 1", "increase"), get_n("Pair 2", "increase")),
+          n = c(n_pair1, n_pair2),
+          alternative = "greater", correct = TRUE)
+
+# "no change" cluster: Pair 2 > Pair 1
+prop.test(x = c(get_n("Pair 2", "no change"), get_n("Pair 1", "no change")),
+          n = c(n_pair2, n_pair1),
+          alternative = "greater", correct = TRUE)
+```
+
+## Is the normative cluster an absolute majority?
+
+Directed one-sample proportion tests against 0.5 (with continuity correction).
+Normative clusters: "increase" in Pair 1, "no change" in Pair 2.
+
+```{r cluster-tests-majority}
+prop.test(x = get_n("Pair 1", "increase"), n = n_pair1,
+          p = 0.50, alternative = "greater", correct = TRUE)
+
+prop.test(x = get_n("Pair 2", "no change"), n = n_pair2,
+          p = 0.50, alternative = "greater", correct = TRUE)
+```
+
+# Figure 5
+
+```{r figure-5, fig.width = 6.9, fig.height = 8.4}
+set.seed(1)  # bootstrapped CIs and jittered individual lines
+
+pub_palette <- c("#E69F00", "#56B4E9", "#009E73",
+                 "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# --- ONE knob: all text scales from BASE -------------------------
+BASE <- 14
+LAB  <- BASE + 4    # panel letters A / B
+TXT  <- BASE - 1    # in-plot percentage labels
+
+theme_pub <- function(base = BASE) {
+  theme_minimal(base_size = base) +
+    theme(
+      text             = element_text(family = body_font),
+      strip.background = element_rect(fill = "grey92", color = "grey92"),
+      strip.text       = element_text(face = "bold", size = base,
+                                      family = title_font,
+                                      margin = margin(5, 5, 5, 5)),
+      axis.title       = element_text(face = "bold", size = base + 1),
+      axis.title.x     = element_text(margin = margin(t = 10), face = "bold"),
+      axis.title.y     = element_text(margin = margin(r = 10), face = "bold"),
+      axis.text        = element_text(size = base, color = "grey20"),
+      panel.grid.minor = element_blank(),
+      legend.position  = "none"
+    )
+}
+
+# --- Per-facet x labels -----------------------------------------
+make_case_label <- function(d) {
+  d$case_label <- factor(
+    paste(d$comparison, d$case),
+    levels = c("Pair 1 case 1", "Pair 1 case 2",
+               "Pair 2 case 1", "Pair 2 case 2"),
+    labels = c("Independent-\ncauses model", "Confounded\nmodel",
+               "Single-link\nmodel",         "Side-effect\nmodel")
+  )
+  d
+}
+
+tdata_sub  <- make_case_label(tdata_main)
+preds_plot <- make_case_label(preds)
+
+# --- Panel A: ratings --------------------------------------------
+g3 <- ggplot(tdata_sub, aes(x = case_label, y = rating,
+                            fill = comparison, color = comparison)) +
+  facet_wrap(~ comparison, nrow = 1, scales = "free_x") +
+  geom_line(aes(group = subj_code),
+            position = position_jitter(height = 0.02, width = 0.05),
+            linewidth = 0.35, alpha = 0.2) +
+  geom_violin(alpha = 0.2, color = NA, trim = TRUE) +
+  stat_summary(aes(group = 1), fun.data = mean_cl_boot, geom = "errorbar",
+               width = 0, linewidth = 1) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1.3) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", shape = 21,
+               size = 4.2, stroke = 1.4, fill = "white") +
+  geom_point(data = preds_plot, aes(x = case_label, y = prediction),
+             color = "black", fill = "black", size = 3, shape = 22) +
+  scale_y_continuous(limits = c(0, 1.05), breaks = seq(0, 1, 0.25),
+                     expand = c(0, 0)) +
+  scale_color_manual(values = pub_palette) +
+  scale_fill_manual(values = pub_palette) +
+  labs(x = NULL, y = "P(e|c) Rating") +
+  theme_pub() +
+  theme(panel.spacing = unit(1.4, "lines"),
+        axis.text.x   = element_text(size = BASE - 2, lineheight = 0.9))
+
+# --- Panel B: clusters -------------------------------------------
+g4 <- ggplot(cluster_summary, aes(x = cluster, y = percentage,
+                                  fill = comparison)) +
+  facet_wrap(~ comparison, nrow = 1) +
+  geom_bar(stat = "identity", alpha = 0.85, color = NA) +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2,
+                linewidth = 0.8, color = "grey20") +
+  geom_text(aes(label = paste0(round(percentage, 0), "%")),
+            vjust = -3, family = body_font, size = TXT / .pt) +
+  scale_y_continuous(limits = c(0, 122), breaks = seq(0, 100, 25),
+                     expand = c(0, 0)) +
+  scale_fill_manual(values = pub_palette) +
+  labs(x = "Cluster", y = "Percentage (%)") +
+  theme_pub() +
+  theme(panel.spacing = unit(1.4, "lines"))
+
+# --- Assemble ----------------------------------------------------
+figure5 <- ggarrange(g3, g4,
+                     labels = c("A", "B"),
+                     font.label = list(size = LAB, color = "black",
+                                       family = title_font),
+                     ncol = 1, nrow = 2, align = "v")
+figure5
+
+ggsave("figures/Figure5_Exp1.pdf", figure5,
+       width = 6.9, height = 8.4, units = "in", device = cairo_pdf)
+```
+
+# Session info
+
+```{r session-info}
+sessionInfo()
+```

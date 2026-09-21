@@ -1,0 +1,338 @@
+---
+title: "Experiment 2: Analysis"
+subtitle: "Making Predictions When Causal Models Change – The Role of Confounding"
+format:
+  html:
+    embed-resources: true
+    toc: true
+    fig-dpi: 300
+execute:
+  warning: false
+  message: false
+---
+
+This script reproduces all results reported for Experiment 2 (Section 4.2 and
+the Participants section 4.1.1) and Figure 8 of the manuscript. Data:
+`data/exp2_data.csv` (see `CODEBOOK.md`). Figure output: `figures/`.
+
+# Setup
+
+```{r setup}
+library(tidyverse)  # data wrangling (dplyr, tidyr) and ggplot2
+library(afex)       # aov_car()
+library(emmeans)    # estimated marginal means and contrasts
+library(binom)      # Wilson CIs for the cluster proportions
+library(Hmisc)      # mean_cl_boot() used in stat_summary()
+library(ggpubr)     # ggarrange()
+library(showtext)   # font rendering
+
+# Fonts: Google fonts are downloaded at run time. Without an internet
+# connection the figure falls back to the default sans font.
+fonts_ok <- tryCatch({
+  font_add_google("Outfit", "title_font")
+  font_add_google("Cabin", "body_font")
+  TRUE
+}, error = function(e) FALSE)
+title_font <- if (fonts_ok) "title_font" else "sans"
+body_font  <- if (fonts_ok) "body_font"  else "sans"
+showtext_auto()
+showtext_opts(dpi = 300)
+
+dir.create("figures", showWarnings = FALSE)
+```
+
+# Data and exclusions
+
+As pre-registered, participants who needed more than three rounds of the
+comprehension test (`instr_tests > 3`) were excluded. The device and attention
+confirmations are applied as in Experiments 1 and 3 (all participants
+confirmed both).
+
+```{r data}
+tdata_raw <- read.csv("data/exp2_data.csv")
+
+# rounds of the comprehension test needed, by condition
+table(tdata_raw$causation_type, tdata_raw$instr_tests)
+
+tdata <- subset(tdata_raw,
+                desktop_conf == "1: I confirm" &
+                attent_conf  == "1: I will take it seriously" &
+                instr_tests  <= 3)
+
+cat("Recruited:", nrow(tdata_raw),
+    "| Excluded:", nrow(tdata_raw) - nrow(tdata),
+    "| Final N:", nrow(tdata), "\n")
+
+# n per condition
+table(tdata$causation_type)
+```
+
+## Demographics
+
+```{r demographics}
+tdata %>%
+  summarise(M_age = mean(age), SD_age = sd(age),
+            min_age = min(age), max_age = max(age))
+```
+
+# Normative values
+
+Normative values of P(e|c) for the models in Figure 6: Equation 4
+(generative confounding link) and Equation A3 (preventive confounding link).
+
+```{r normative}
+# Equation 4: generative confounding link A -> C
+p_ec_cccf <- function(w_ce, w_ae, w_ac, b_a, b_c) {
+  numerator   <- w_ac * b_a + b_c * b_a - w_ac * b_c * b_a
+  denominator <- w_ac * b_a + b_c - w_ac * b_c * b_a
+  w_ce + (1 - w_ce) * w_ae * (numerator / denominator)
+}
+
+# Equation A3: preventive confounding link A -> C
+# (b_c cancels out of P(a|c), Equation A1)
+p_ec_prev <- function(w_ce, w_ae, w_ac, b_a) {
+  p_a_given_c <- (b_a * (1 - w_ac)) / (1 - b_a * w_ac)
+  w_ce + (1 - w_ce) * w_ae * p_a_given_c
+}
+
+preds <- data.frame(
+  causation_type = c("generative", "generative", "preventive", "preventive"),
+  case           = c("wac = 0.1", "wac = 0.9", "wac = 0.1", "wac = 0.9"),
+  prediction     = c(
+    p_ec_cccf(w_ce = 0.3, w_ae = 0.9, w_ac = 0.1, b_a = 0.2, b_c = 0.2),
+    p_ec_cccf(w_ce = 0.3, w_ae = 0.9, w_ac = 0.9, b_a = 0.2, b_c = 0.2),
+    p_ec_prev(w_ce = 0.3, w_ae = 0.9, w_ac = 0.1, b_a = 0.2),
+    p_ec_prev(w_ce = 0.3, w_ae = 0.9, w_ac = 0.9, b_a = 0.2)
+  )
+)
+preds$causation_type <- factor(preds$causation_type,
+                               levels = c("generative", "preventive"))
+preds$case <- factor(preds$case, levels = c("wac = 0.1", "wac = 0.9"))
+preds
+```
+
+# Mean ratings
+
+`case_01` is the rating for the model with the weak confounding link
+(w_ac = 0.1), `case_09` the rating for the model with the strong link
+(w_ac = 0.9), irrespective of the side on which the model was shown.
+
+```{r long-format}
+tdata_main <- tdata %>%
+  select(subj_code, causation_type, side_order, case_01, case_09) %>%
+  pivot_longer(cols = c(case_01, case_09),
+               names_to = "case", values_to = "rating")
+
+tdata_main$causation_type <- factor(tdata_main$causation_type,
+                                    levels = c("generative", "preventive"))
+tdata_main$case <- factor(tdata_main$case,
+                          levels = c("case_01", "case_09"),
+                          labels = c("wac = 0.1", "wac = 0.9"))
+
+tdata_main$rating <- tdata_main$rating * 0.01  # convert to 0-1 scale
+```
+
+2 (Condition; between) × 2 (Model; within) ANOVA. The η²p of the interaction
+is the effect size reported for the interaction contrast.
+
+```{r anova}
+a1 <- aov_car(rating ~ causation_type * case + Error(subj_code / case),
+              tdata_main, anova_table = list(es = "pes"))
+a1
+```
+
+Cell means (shown in Figure 8A):
+
+```{r means}
+emm <- emmeans(a1, ~ case * causation_type)
+emm
+```
+
+Planned directed interaction contrast: ratings increase from weak to strong
+w_ac in the generative condition and decrease in the preventive condition.
+
+```{r interaction-contrast}
+# cell order: (0.1, generative), (0.9, generative), (0.1, preventive), (0.9, preventive)
+contrast(emm, list(interaction = c(-1, 1, 1, -1)), side = ">")
+```
+
+Planned simple contrasts within each condition: ratings for w_ac = 0.9 minus
+ratings for w_ac = 0.1 (two-sided, as pre-registered).
+
+```{r simple-contrasts}
+emm_by_type <- emmeans(a1, ~ case | causation_type)
+pairs(emm_by_type, reverse = TRUE, adjust = "none")
+```
+
+# Clusters
+
+Participants are clustered by their intra-individual rating difference
+(`case_09 - case_01`). Differences within ±3 points on the 0–100 rating scale
+are classified as "no change".
+
+```{r clusters}
+margin_of_error <- 3  # on the 0-100 rating scale
+
+tdata_clusters <- tdata %>%
+  mutate(
+    rating_difference = case_09 - case_01,
+    cluster = case_when(
+      abs(rating_difference) <= margin_of_error ~ "no change",
+      rating_difference >  margin_of_error      ~ "increase",
+      rating_difference < -margin_of_error      ~ "decrease"
+    )
+  )
+
+tdata_clusters$causation_type <- factor(tdata_clusters$causation_type,
+                                        levels = c("generative", "preventive"))
+
+cluster_summary <- tdata_clusters %>%
+  count(causation_type, cluster, name = "n") %>%
+  group_by(causation_type) %>%
+  mutate(n_total = sum(n),
+         p = n / n_total,
+         percentage = 100 * p) %>%
+  ungroup() %>%
+  # Wilson 95% CI for each bar
+  bind_cols(
+    binom.confint(x = .$n, n = .$n_total, methods = "wilson") %>%
+      transmute(ci_low = 100 * lower, ci_high = 100 * upper)
+  )
+
+cluster_summary
+```
+
+## Cluster tests
+
+Distribution of clusters across conditions (Pearson's χ² test):
+
+```{r cluster-chisq}
+cluster_table <- table(tdata_clusters$causation_type,
+                       factor(tdata_clusters$cluster,
+                              levels = c("decrease", "increase", "no change")))
+cluster_table
+
+chisq.test(cluster_table)
+```
+
+Among participants who changed their ratings, is the normative cluster larger
+than the non-normative one? Directed (one-sided) binomial tests against 0.5,
+restricted to the "increase" and "decrease" clusters.
+
+```{r cluster-binom-direction}
+# generative: "increase" > "decrease"
+binom.test(x = cluster_table["generative", "increase"],
+           n = cluster_table["generative", "increase"] +
+               cluster_table["generative", "decrease"],
+           p = 0.5, alternative = "greater")
+
+# preventive: "decrease" > "increase"
+binom.test(x = cluster_table["preventive", "decrease"],
+           n = cluster_table["preventive", "decrease"] +
+               cluster_table["preventive", "increase"],
+           p = 0.5, alternative = "greater")
+```
+
+Normative cluster vs. "no change" cluster. Two-sided binomial tests against
+0.5, restricted to these two clusters.
+
+```{r cluster-binom-nochange}
+# generative: "increase" vs. "no change"
+binom.test(x = cluster_table["generative", "increase"],
+           n = cluster_table["generative", "increase"] +
+               cluster_table["generative", "no change"],
+           p = 0.5)
+
+# preventive: "decrease" vs. "no change"
+binom.test(x = cluster_table["preventive", "decrease"],
+           n = cluster_table["preventive", "decrease"] +
+               cluster_table["preventive", "no change"],
+           p = 0.5)
+```
+
+# Figure 8
+
+```{r figure-8, fig.width = 6.9, fig.height = 8}
+set.seed(1)  # bootstrapped CIs and jittered individual lines
+
+pub_palette <- c("#E69F00", "#56B4E9", "#009E73",
+                 "#F0E442", "#0072B2", "#D55E00", "#CC79A7")
+
+# --- ONE knob: all text scales from BASE (identical to Exp 1) ----
+BASE <- 14
+LAB  <- BASE + 4    # panel letters A / B
+TXT  <- BASE - 1    # in-plot percentage labels
+
+theme_pub <- function(base = BASE) {
+  theme_minimal(base_size = base) +
+    theme(
+      text             = element_text(family = body_font),
+      strip.background = element_rect(fill = "grey92", color = "grey92"),
+      strip.text       = element_text(face = "bold", size = base,
+                                      family = title_font,
+                                      margin = margin(5, 5, 5, 5)),
+      axis.title       = element_text(face = "bold", size = base + 1),
+      axis.title.x     = element_text(margin = margin(t = 10), face = "bold"),
+      axis.title.y     = element_text(margin = margin(r = 10), face = "bold"),
+      axis.text        = element_text(size = base, color = "grey20"),
+      panel.grid.minor = element_blank(),
+      legend.position  = "none"
+    )
+}
+
+# --- Panel A: ratings --------------------------------------------
+g3 <- ggplot(tdata_main, aes(x = case, y = rating,
+                             fill = causation_type, color = causation_type)) +
+  facet_wrap(~ causation_type, nrow = 1) +
+  geom_line(aes(group = subj_code),
+            position = position_jitter(height = 0.02, width = 0.05),
+            linewidth = 0.35, alpha = 0.2) +
+  geom_violin(alpha = 0.2, color = NA, trim = TRUE) +
+  stat_summary(aes(group = 1), fun.data = mean_cl_boot, geom = "errorbar",
+               width = 0, linewidth = 1) +
+  stat_summary(aes(group = 1), fun = mean, geom = "line", linewidth = 1.3) +
+  stat_summary(aes(group = 1), fun = mean, geom = "point", shape = 21,
+               size = 4.2, stroke = 1.4, fill = "white") +
+  geom_point(data = preds, aes(x = case, y = prediction),
+             color = "black", fill = "black", size = 3, shape = 22) +
+  scale_y_continuous(limits = c(0, 1.05), breaks = seq(0, 1, 0.25),
+                     expand = c(0, 0)) +
+  scale_color_manual(values = pub_palette) +
+  scale_fill_manual(values = pub_palette) +
+  labs(x = "Parameter Value", y = "P(e|c) Rating") +
+  theme_pub() +
+  theme(panel.spacing = unit(1.4, "lines"))
+
+# --- Panel B: clusters -------------------------------------------
+g4 <- ggplot(cluster_summary, aes(x = cluster, y = percentage,
+                                  fill = causation_type)) +
+  facet_wrap(~ causation_type, nrow = 1) +
+  geom_bar(stat = "identity", alpha = 0.85, color = NA) +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_high), width = 0.2,
+                linewidth = 0.8, color = "grey20") +
+  geom_text(aes(label = paste0(round(percentage, 0), "%")),
+            vjust = -3.5, family = body_font, size = TXT / .pt) +
+  scale_y_continuous(limits = c(0, 122), breaks = seq(0, 100, 25),
+                     expand = c(0, 0)) +
+  scale_fill_manual(values = pub_palette) +
+  labs(x = "Cluster", y = "Percentage (%)") +
+  theme_pub() +
+  theme(panel.spacing = unit(1.4, "lines"))
+
+# --- Assemble ----------------------------------------------------
+figure8 <- ggarrange(g3, g4,
+                     labels = c("A", "B"),
+                     font.label = list(size = LAB, color = "black",
+                                       family = title_font),
+                     ncol = 1, nrow = 2, align = "v")
+figure8
+
+ggsave("figures/Figure8_Exp2.pdf", figure8,
+       width = 6.9, height = 8, units = "in", device = cairo_pdf)
+```
+
+# Session info
+
+```{r session-info}
+sessionInfo()
+```

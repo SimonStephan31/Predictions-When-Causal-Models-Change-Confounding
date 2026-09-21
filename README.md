@@ -1,36 +1,44 @@
 # Making Predictions When Causal Models Change – The Role of Confounding
 
-This repository contains the code and data for the paper "Making Predictions When Causal Models Change – The Role of Confounding" 
-by Simon Stephan, Sarah Placì and Michael Waldmann. The paper investigates how changes in causal models affect the accuracy of predictions 
-and the role of confounding variables in this process.
+Experiment materials, data, and analysis scripts for Stephan, Placì, & Waldmann (JEP:LMC).
 
-This repository contains three main folders, each corresponding to a different experiment conducted in the study. 
-Each experiment folder is organized into two subfolders: "data_and_analyses" and "experiment_files". 
-The "data_and_analyses" folder contains the datasets used for the experiments and the analysis scripts, 
-while the "experiment_files" folder includes the experiment files. 
-The "experiment_files" folder can be downloaded to run offline demo versions of the studies.
+## Contents
 
-The corresponding OSF-project can be found at [https://osf.io/fu3ab/](https://osf.io/fu3ab/), 
-where you can also find the preregistrations of the experiments.
+| Path | Content |
+|---|---|
+| `Exp1_Analysis.qmd` | Results of Experiment 1 and Figure 5 |
+| `Exp2_Analysis.qmd` | Results of Experiment 2 and Figure 8 |
+| `Exp3_Analysis.qmd` | Results of Experiment 3 and Figure 10 |
+| `Appendix_FigureA1.qmd` | Figure A1 (normative predictions under generative and preventive confounding) |
+| `*.html` | Rendered versions of the four scripts, including all output |
+| `data/` | Raw data of Experiments 1–3 |
+| `CODEBOOK.md` | Description of all variables in the data files |
+| `figures/` | Figures 5, 8, 10, and A1 as written by the scripts |
+| `experimental-materials/` | jsPsych code of Experiments 1–3 |
 
-```
-+---Experiment_1
-|   +---data_and_analyses
-|   |
-|   \---experiment_files
-|    
-|     
-+---Experiment_2
-|   +---data_and_analyses
-|   |
-|   \---experiment_files
-|      
-|     
-\---Experiment_3
-    +---data_and_analyses
-    |
-    \---experiment_files
+## Reproducing the results
+
+The analyses were run in R 4.5.1. Required packages:
+
+```r
+install.packages(c("tidyverse", "afex", "emmeans", "lme4", "lmerTest", "pbkrtest",
+                   "binom", "Hmisc", "ggpubr", "showtext"))
 ```
 
-In case of questions, don't hesitate to contact me, Simon Stephan, under [simon.stephan31@gmail.com](mailto:simon.stephan31@gmail.com). 
+The rendered `.html` files can be opened in any browser without installing
+anything. To reproduce the results yourself, render each script with Quarto
+from the repository root, e.g. `quarto render Exp1_Analysis.qmd`, or open it
+in RStudio and run all chunks.
+Each script reads its data from `data/`, prints all statistics reported in
+the manuscript, and saves the corresponding figure to `figures/`. The package
+versions used are listed at the end of each rendered script (`sessionInfo()`).
 
+The figures use the Google fonts Outfit and Cabin, which are downloaded when
+the script runs. Without an internet connection the scripts fall back to the
+default sans font; all statistics are unaffected.
+
+## Experiment materials
+
+The folder `experiment-materials/` contains the jsPsych (de Leeuw, Gilbert, &
+Luchterhandt, 2023) code of all three experiments. The experiments can be
+downloaded and run offline in a web browser. Open the .html file in a browser to start the experiment.

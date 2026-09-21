@@ -1,0 +1,110 @@
+---
+title: "Appendix: Figure A1"
+subtitle: "Making Predictions When Causal Models Change – The Role of Confounding"
+format:
+  html:
+    embed-resources: true
+    toc: true
+execute:
+  warning: false
+  message: false
+---
+
+This script produces Figure A1 of the manuscript: normative values of P(e|c)
+under a generative (Panel A) and a preventive (Panel B) confounding link
+A → C, as a function of the base rate of the target cause (b_c) and the
+strength of the confounding link (w_ac). Figure output: `figures/`.
+
+# Setup
+
+```{r setup}
+library(ggplot2)
+library(ggpubr)  # ggarrange()
+
+dir.create("figures", showWarnings = FALSE)
+```
+
+# Normative functions
+
+```{r functions}
+# Equation 4: generative confounding link A -> C
+P_ec_cccf <- function(b_c, w_ac, w_ae, w_ce, b_a) {
+  numerator   <- w_ac * b_a + b_c * b_a - w_ac * b_c * b_a
+  denominator <- w_ac * b_a + b_c - w_ac * b_c * b_a
+  P_ac <- numerator / denominator
+  w_ce + (1 - w_ce) * w_ae * P_ac
+}
+
+# Equations A1 and A2: preventive confounding link A -> C
+# P(a|c) under noisy-AND-NOT; b_c cancels out
+P_ec_cc_minus_cf <- function(b_c, w_ac, w_ae, w_ce, b_a) {
+  P_ac <- (b_a * (1 - w_ac)) / (1 - b_a * w_ac)
+  w_ce + (P_ac * w_ae) - (w_ce * P_ac * w_ae)
+}
+```
+
+# Parameter values
+
+The fixed parameters are the values used in the experiments.
+
+```{r parameters}
+w_ae <- 0.9
+w_ce <- 0.3
+b_a  <- 0.2
+
+w_ac_vals <- seq(0, 1, by = 0.1)             # one line per value of w_ac
+b_c_vals  <- seq(0, 1, length.out = 200)     # x-axis
+
+df <- expand.grid(b_c = b_c_vals, w_ac = w_ac_vals)
+df$P_ec_gen  <- with(df, P_ec_cccf(b_c, w_ac, w_ae, w_ce, b_a))
+df$P_ec_prev <- with(df, P_ec_cc_minus_cf(b_c, w_ac, w_ae, w_ce, b_a))
+
+# Annotation of the fixed parameters
+param_label <- bquote(
+  w[ae] == .(w_ae) * "," ~
+  w[ce] == .(w_ce) * "," ~
+  b[a]  == .(b_a)
+)
+```
+
+# Figure A1
+
+```{r figure-A1, fig.width = 12, fig.height = 6}
+plot_pec <- function(yvar, title) {
+  ggplot(df, aes(x = b_c, y = .data[[yvar]], color = factor(w_ac))) +
+    geom_line(linewidth = 1.2) +
+    labs(
+      x = expression(b[c]),
+      y = expression(P(e~"|"~c)),
+      color = expression(w[ac]),
+      title = title
+    ) +
+    annotate(
+      "text",
+      x = 0.02, y = 0.98,
+      label = as.expression(param_label),
+      hjust = 0, vjust = 1,
+      size = 5
+    ) +
+    scale_y_continuous(limits = c(0, 1), breaks = seq(0, 1, by = 0.1)) +
+    theme_minimal(base_size = 18) +
+    theme(plot.title = element_text(size = 18))
+}
+
+gen  <- plot_pec("P_ec_gen",  "Generative Confounding")
+prev <- plot_pec("P_ec_prev", "Preventive Confounding")
+
+figureA1 <- ggarrange(gen, prev,
+                      labels = c("A", "B"),
+                      font.label = list(size = 24, color = "black"),
+                      ncol = 2, nrow = 1)
+figureA1
+
+ggsave("figures/FigureA1.pdf", figureA1, width = 12, height = 6)
+```
+
+# Session info
+
+```{r session-info}
+sessionInfo()
+```
