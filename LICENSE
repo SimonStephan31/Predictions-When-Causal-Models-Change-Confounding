@@ -1,0 +1,33 @@
+CC0 1.0 Universal (CC0 1.0) Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/
+
+To the extent possible under law, Simon Stephan, Sarah Placì, and Michael R.
+Waldmann have waived all copyright and related or neighbouring rights to the
+experimental materials, data, and analysis scripts in this repository. The work
+is published from Germany. You may copy, modify, distribute, and use the work,
+including for commercial purposes, without asking permission.
+
+Attribution is not legally required, but if you use these materials we would
+appreciate a citation to:
+
+  Stephan, S., Placì, S., & Waldmann, M. R. (in press). Making predictions when
+  causal models change – The role of confounding. Journal of Experimental
+  Psychology: Learning, Memory, and Cognition.
+
+
+EXCEPTION: THIRD-PARTY SOFTWARE
+
+The CC0 dedication above does NOT apply to the contents of:
+
+  experimental-materials/Exp-1-files/jspsych/
+  experimental-materials/Exp-2-files/jspsych/
+  experimental-materials/Exp-3-files/jspsych/
+
+These directories contain version 7.1.2 of the jsPsych library
+(https://www.jspsych.org), copyright Joshua R. de Leeuw and the jsPsych
+contributors, distributed under the MIT License and redistributed here
+unmodified. Some of the bundled plugin files additionally contain compiled
+helper code from third parties (for example the TypeScript runtime helpers,
+copyright Microsoft Corporation), likewise under their own permissive
+licenses. The MIT License text as distributed by the jsPsych project is
+reproduced in LICENSE-jsPsych.

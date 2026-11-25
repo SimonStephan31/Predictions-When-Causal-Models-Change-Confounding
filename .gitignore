@@ -1,0 +1,11 @@
+# OS / sync metadata
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# R / Quarto working files
+.Rhistory
+.RData
+.Rproj.user/
+*_files/
+.quarto/
